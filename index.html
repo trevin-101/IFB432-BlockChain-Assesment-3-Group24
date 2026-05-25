@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FuelGuard - Fuel Supply Chain</title>
+</head>
+<body>
+    <h1>FuelGuard - Fuel Supply Chain</h1>
+
+    <p><em>This dApp interacts with three separate smart contracts:
+        <strong>FuelGuardRecord</strong>,
+        <strong>FuelGuardAllocation</strong>, and
+        <strong>FuelGuardVerification</strong>.</em></p>
+
+    <hr>
+
+    <h2>0. Grant Role (Admin only — FuelGuardRecord)</h2>
+    <label for="grantUserAddress">User Address:</label>
+    <input type="text" id="grantUserAddress" placeholder="0x...">
+
+    <label for="grantRoleType">Role:</label>
+    <select id="grantRoleType">
+        <option value="IMPORTER_ROLE">Importer</option>
+        <option value="REGULATOR_ROLE">Regulator (ACCC)</option>
+        <option value="WHOLESALER_ROLE">Wholesaler</option>
+        <option value="RETAILER_ROLE">Retailer</option>
+    </select>
+
+    <button onclick="grantRole()">Grant Role</button>
+
+    <hr>
+
+    <h2>1. Record Fuel Batch (Importer — FuelGuardRecord)</h2>
+    <label for="fuelType">Fuel Type:</label>
+    <input type="text" id="fuelType" placeholder="e.g. Petrol 91 / Diesel">
+
+    <label for="volume">Volume (litres):</label>
+    <input type="number" id="volume" placeholder="Enter volume in litres">
+
+    <label for="portLocation">Port Location:</label>
+    <input type="text" id="portLocation" placeholder="e.g. Port of Brisbane">
+
+    <button onclick="recordFuelBatch()">Record Fuel Batch</button>
+
+    <hr>
+
+    <h2>2. Allocate to Wholesaler (Importer — FuelGuardAllocation)</h2>
+    <label for="allocateBatchId">Batch ID:</label>
+    <input type="number" id="allocateBatchId" placeholder="Enter Batch ID">
+
+    <label for="allocateVolume">Volume (litres):</label>
+    <input type="number" id="allocateVolume" placeholder="Volume to allocate">
+
+    <label for="wholesalerAddress">Wholesaler Address:</label>
+    <input type="text" id="wholesalerAddress" placeholder="0x...">
+
+    <button onclick="allocateToWholesaler()">Allocate to Wholesaler</button>
+
+    <hr>
+
+    <h2>3. Distribute to Retailer (Wholesaler — FuelGuardAllocation)</h2>
+    <label for="distributeBatchId">Batch ID:</label>
+    <input type="number" id="distributeBatchId" placeholder="Enter Batch ID">
+
+    <label for="distributeVolume">Volume (litres):</label>
+    <input type="number" id="distributeVolume" placeholder="Volume to distribute">
+
+    <label for="retailerAddress">Retailer Address:</label>
+    <input type="text" id="retailerAddress" placeholder="0x...">
+
+    <button onclick="distributeToRetailer()">Distribute to Retailer</button>
+
+    <hr>
+
+    <h2>4. Confirm Delivery (Retailer — FuelGuardAllocation)</h2>
+    <label for="confirmBatchId">Batch ID:</label>
+    <input type="number" id="confirmBatchId" placeholder="Enter Batch ID">
+
+    <button onclick="confirmDelivery()">Confirm Delivery</button>
+
+    <hr>
+
+    <h2>5. View Batch Details (FuelGuardVerification — read-only)</h2>
+    <label for="batchId">Batch ID:</label>
+    <input type="number" id="batchId" placeholder="Enter Batch ID">
+
+    <button onclick="getBatchDetails()">View Full Details</button>
+    <button onclick="getBatchHistory()">View Full Provenance History</button>
+
+    <div id="batchDetails"></div>
+    <div id="batchHistory"></div>
+
+    <hr>
+
+    <h2>6. Check Stakeholder Holdings (FuelGuardVerification — anti-hoarding)</h2>
+    <label for="holdingsAddress">Stakeholder Address:</label>
+    <input type="text" id="holdingsAddress" placeholder="0x...">
+
+    <button onclick="getCurrentHoldings()">Check Active Batches</button>
+
+    <div id="holdings"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.3.6/dist/web3.min.js"></script>
+
+    <script>
+
+ 
+        // !!! THREE CONTRACT ADDRESSES + THREE ABIs
+
+
+        const recordAddress = '0xc661F8E37460A74bE59642f13BFbdA24E6A1CF7c';
+        const allocationAddress = '0xf5cee4173100F41baD90019b2b65E41D877892eC';
+        const verificationAddress = '0xEc1d5BbF26dD624f94d6575e9524eCe24C756Ed6';
+
+        const recordABI = [
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "allocationContract",
+				"type": "address"
+			}
+		],
+		"name": "AllocationContractSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "fromBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			}
+		],
+		"name": "BatchTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "retailer",
+				"type": "address"
+			}
+		],
+		"name": "DeliveryRecorded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "importer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "fuelType",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			}
+		],
+		"name": "FuelBatchRecorded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			}
+		],
+		"name": "RoleGranted",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "ADMIN_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "IMPORTER_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "REGULATOR_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "RETAILER_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "WHOLESALER_ROLE",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "admin",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "allocationContract",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "parentBatchId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "actor",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "receiver",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum FuelGuardRecord.BatchState",
+				"name": "newState",
+				"type": "uint8"
+			},
+			{
+				"internalType": "string",
+				"name": "action",
+				"type": "string"
+			}
+		],
+		"name": "createChildBatch",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"name": "getBatchDetails",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "batchId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "parentBatchId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "fuelType",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "volumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "remainingVolumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "dateRecorded",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "portLocation",
+						"type": "string"
+					},
+					{
+						"internalType": "address",
+						"name": "currentCustodian",
+						"type": "address"
+					},
+					{
+						"internalType": "enum FuelGuardRecord.BatchState",
+						"name": "state",
+						"type": "uint8"
+					}
+				],
+				"internalType": "struct FuelGuardRecord.FuelBatch",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"name": "getBatchHistory",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "action",
+						"type": "string"
+					},
+					{
+						"internalType": "address",
+						"name": "actor",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "volumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct FuelGuardRecord.BatchHistory[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "stakeholder",
+				"type": "address"
+			}
+		],
+		"name": "getCurrentHoldings",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "role",
+				"type": "bytes32"
+			}
+		],
+		"name": "grantRole",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "retailer",
+				"type": "address"
+			}
+		],
+		"name": "markDelivered",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "fuelType",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "portLocation",
+				"type": "string"
+			}
+		],
+		"name": "recordFuelBatch",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"name": "roles",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "contractAddress",
+				"type": "address"
+			}
+		],
+		"name": "setAllocationContract",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+];
+        const allocationABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recordAddress",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "fromBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "wholesaler",
+				"type": "address"
+			}
+		],
+		"name": "AllocatedToWholesaler",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "retailer",
+				"type": "address"
+			}
+		],
+		"name": "DeliveryConfirmed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "fromBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "retailer",
+				"type": "address"
+			}
+		],
+		"name": "DistributedToRetailer",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "wholesaler",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			}
+		],
+		"name": "allocateToWholesaler",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"name": "confirmDelivery",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "retailer",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "volumeLitres",
+				"type": "uint256"
+			}
+		],
+		"name": "distributeToRetailer",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "newBatchId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "record",
+		"outputs": [
+			{
+				"internalType": "contract FuelGuardRecord",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+        const verificationABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recordAddress",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"name": "getBatchDetails",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "batchId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "parentBatchId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "fuelType",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "volumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "remainingVolumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "dateRecorded",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "portLocation",
+						"type": "string"
+					},
+					{
+						"internalType": "address",
+						"name": "currentCustodian",
+						"type": "address"
+					},
+					{
+						"internalType": "enum FuelGuardRecord.BatchState",
+						"name": "state",
+						"type": "uint8"
+					}
+				],
+				"internalType": "struct FuelGuardRecord.FuelBatch",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "batchId",
+				"type": "uint256"
+			}
+		],
+		"name": "getBatchHistory",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "action",
+						"type": "string"
+					},
+					{
+						"internalType": "address",
+						"name": "actor",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "volumeLitres",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct FuelGuardRecord.BatchHistory[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "stakeholder",
+				"type": "address"
+			}
+		],
+		"name": "getCurrentHoldings",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "record",
+		"outputs": [
+			{
+				"internalType": "contract FuelGuardRecord",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+
+        // WEB3 INITIALISATION
+    
+        var web3;
+        var recordContract;
+        var allocationContract;
+        var verificationContract;
+
+        async function initWeb3() {
+            if (typeof window.ethereum !== 'undefined') {
+                web3 = new Web3(window.ethereum);
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    web3.eth.defaultAccount = accounts[0];
+                    console.log("Default account set:", web3.eth.defaultAccount);
+
+                    if (recordAddress && recordABI.length > 0) {
+                        recordContract = new web3.eth.Contract(recordABI, recordAddress);
+                        console.log("Record contract loaded at:", recordAddress);
+                    }
+                    if (allocationAddress && allocationABI.length > 0) {
+                        allocationContract = new web3.eth.Contract(allocationABI, allocationAddress);
+                        console.log("Allocation contract loaded at:", allocationAddress);
+                    }
+                    if (verificationAddress && verificationABI.length > 0) {
+                        verificationContract = new web3.eth.Contract(verificationABI, verificationAddress);
+                        console.log("Verification contract loaded at:", verificationAddress);
+                    }
+
+                    if (!recordContract || !allocationContract || !verificationContract) {
+                        console.warn("One or more contract addresses/ABIs not set yet.");
+                    }
+                } catch (error) {
+                    console.error("User rejected MetaMask connection:", error);
+                    alert("Please connect MetaMask to use this app.");
+                }
+            } else {
+                alert('MetaMask not detected. Please install MetaMask.');
+            }
+        }
+
+        window.addEventListener('load', initWeb3);
+
+        function checkRecord()       { if (!recordContract)       { alert("Record contract not loaded.");       return false; } return true; }
+        function checkAllocation()   { if (!allocationContract)   { alert("Allocation contract not loaded.");   return false; } return true; }
+        function checkVerification() { if (!verificationContract) { alert("Verification contract not loaded."); return false; } return true; }
+
+        // Convert numeric state to human label
+        function stateName(n) {
+            const states = ["Recorded", "AllocatedToWholesaler", "InTransitToRetailer", "Delivered"];
+            return states[parseInt(n)] || "Unknown";
+        }
+
+    
+        // FUNCTION 0: grantRole (FuelGuardRecord)
+
+        async function grantRole() {
+            if (!checkRecord()) return;
+
+            const user = document.getElementById('grantUserAddress').value;
+            const roleName = document.getElementById('grantRoleType').value;
+
+            // Look up the role bytes32 identifier from the Record contract's public constants
+            const roleBytes = await recordContract.methods[roleName]().call();
+
+            await recordContract.methods.grantRole(user, roleBytes)
+                .send({ from: web3.eth.defaultAccount })
+                .on('transactionHash', function (hash) {
+                    console.log("Transaction Hash:", hash);
+                })
+                .on('confirmation', function (confirmationNumber, receipt) {
+                    console.log("Confirmation Number:", confirmationNumber);
+                    console.log("Receipt:", receipt);
+                });
+
+            alert('Role ' + roleName + ' granted to ' + user);
+        }
+
+
+        // FUNCTION 1: recordFuelBatch (FuelGuardRecord)
+
+        async function recordFuelBatch() {
+            if (!checkRecord()) return;
+
+            const fuelType = document.getElementById('fuelType').value;
+            const volume = document.getElementById('volume').value;
+            const portLocation = document.getElementById('portLocation').value;
+
+            await recordContract.methods.recordFuelBatch(fuelType, volume, portLocation)
+                .send({ from: web3.eth.defaultAccount })
+                .on('transactionHash', function (hash) {
+                    console.log("Transaction Hash:", hash);
+                })
+                .on('confirmation', function (confirmationNumber, receipt) {
+                    console.log("Confirmation Number:", confirmationNumber);
+                    console.log("Receipt:", receipt);
+                });
+
+            alert('Fuel batch recorded successfully!');
+        }
+
+
+        // FUNCTION 2: allocateToWholesaler (FuelGuardAllocation)
+
+        async function allocateToWholesaler() {
+            if (!checkAllocation()) return;
+
+            const batchId = document.getElementById('allocateBatchId').value;
+            const volume = document.getElementById('allocateVolume').value;
+            const wholesaler = document.getElementById('wholesalerAddress').value;
+
+            await allocationContract.methods.allocateToWholesaler(batchId, wholesaler, volume)
+                .send({ from: web3.eth.defaultAccount })
+                .on('transactionHash', function (hash) {
+                    console.log("Transaction Hash:", hash);
+                });
+
+            alert('Allocated ' + volume + 'L from batch ' + batchId + ' to wholesaler');
+        }
+
+
+        // FUNCTION 3: distributeToRetailer (FuelGuardAllocation)
+
+        async function distributeToRetailer() {
+            if (!checkAllocation()) return;
+
+            const batchId = document.getElementById('distributeBatchId').value;
+            const volume = document.getElementById('distributeVolume').value;
+            const retailer = document.getElementById('retailerAddress').value;
+
+            await allocationContract.methods.distributeToRetailer(batchId, retailer, volume)
+                .send({ from: web3.eth.defaultAccount })
+                .on('transactionHash', function (hash) {
+                    console.log("Transaction Hash:", hash);
+                });
+
+            alert('Distributed ' + volume + 'L from batch ' + batchId + ' to retailer');
+        }
+
+   
+        // FUNCTION 4: confirmDelivery (FuelGuardAllocation)
+  
+        async function confirmDelivery() {
+            if (!checkAllocation()) return;
+
+            const batchId = document.getElementById('confirmBatchId').value;
+
+            await allocationContract.methods.confirmDelivery(batchId)
+                .send({ from: web3.eth.defaultAccount })
+                .on('transactionHash', function (hash) {
+                    console.log("Transaction Hash:", hash);
+                });
+
+            alert('Delivery confirmed for batch ' + batchId);
+        }
+
+
+        // FUNCTION 5a: getBatchDetails (FuelGuardVerification)
+
+        async function getBatchDetails() {
+            if (!checkVerification()) return;
+
+            const batchId = document.getElementById('batchId').value;
+            const batch = await verificationContract.methods.getBatchDetails(batchId).call();
+
+            const stateStr = stateName(batch.state);
+
+            const batchDetailsDiv = document.getElementById('batchDetails');
+            batchDetailsDiv.innerHTML = `
+                <h3>Batch Details (queried via FuelGuardVerification)</h3>
+                <p><strong>Batch ID:</strong> ${batch.batchId}</p>
+                <p><strong>Parent Batch:</strong> ${batch.parentBatchId == 0 ? '(none - original import)' : batch.parentBatchId}</p>
+                <p><strong>Fuel Type:</strong> ${batch.fuelType}</p>
+                <p><strong>Total Volume:</strong> ${batch.volumeLitres} L</p>
+                <p><strong>Remaining Volume:</strong> ${batch.remainingVolumeLitres} L</p>
+                <p><strong>Port:</strong> ${batch.portLocation}</p>
+                <p><strong>Date Recorded:</strong> ${new Date(batch.dateRecorded * 1000)}</p>
+                <p><strong>Current Custodian:</strong> ${batch.currentCustodian}</p>
+                <p><strong>State:</strong> ${stateStr}</p>
+            `;
+        }
+
+
+        // FUNCTION 5b: getBatchHistory (FuelGuardVerification)
+        // Returns array of BatchHistory structs (full event log)
+
+        async function getBatchHistory() {
+            if (!checkVerification()) return;
+
+            const batchId = document.getElementById('batchId').value;
+            const batchHistoryDiv = document.getElementById('batchHistory');
+
+            try {
+                const history = await verificationContract.methods.getBatchHistory(batchId).call();
+
+                batchHistoryDiv.innerHTML = "<h3>Provenance History for Batch " + batchId + "</h3>";
+
+                if (history.length === 0) {
+                    batchHistoryDiv.innerHTML += "<p>No history available for this batch.</p>";
+                    return;
+                }
+
+                batchHistoryDiv.innerHTML += "<ol>";
+                for (let i = 0; i < history.length; i++) {
+                    const entry = history[i];
+                    batchHistoryDiv.innerHTML += `
+                        <li>
+                            <strong>${entry.action}</strong><br>
+                            <strong>Actor:</strong> ${entry.actor}<br>
+                            <strong>From:</strong> ${entry.from === '0x0000000000000000000000000000000000000000' ? '(origin)' : entry.from}<br>
+                            <strong>To:</strong> ${entry.to}<br>
+                            <strong>Volume:</strong> ${entry.volumeLitres} L<br>
+                            <strong>Time:</strong> ${new Date(entry.timestamp * 1000)}
+                        </li>
+                        <br>
+                    `;
+                }
+                batchHistoryDiv.innerHTML += "</ol>";
+                batchHistoryDiv.innerHTML += "<p><strong>Total events:</strong> " + history.length + "</p>";
+            } catch (error) {
+                console.error('Error fetching batch history:', error);
+                batchHistoryDiv.innerHTML = "<p>Error fetching batch history. Please try again.</p>";
+            }
+        }
+
+        // FUNCTION 6: getCurrentHoldings (FuelGuardVerification)
+        // Returns ARRAY of batch IDs the stakeholder currently holds
+
+        async function getCurrentHoldings() {
+            if (!checkVerification()) return;
+
+            const address = document.getElementById('holdingsAddress').value;
+            const batchIds = await verificationContract.methods.getCurrentHoldings(address).call();
+
+            const holdingsDiv = document.getElementById('holdings');
+
+            if (batchIds.length === 0) {
+                holdingsDiv.innerHTML = `
+                    <h3>Holdings for ${address}</h3>
+                    <p>No active batches currently held.</p>
+                `;
+                return;
+            }
+
+            // Fetch each batch's remaining volume to compute total
+            let totalVolume = 0;
+            let html = `<h3>Holdings for ${address}</h3>`;
+            html += `<p><strong>Active batches:</strong> ${batchIds.length}</p>`;
+            html += `<ul>`;
+            for (let i = 0; i < batchIds.length; i++) {
+                try {
+                    const batch = await verificationContract.methods.getBatchDetails(batchIds[i]).call();
+                    totalVolume += parseInt(batch.remainingVolumeLitres);
+                    html += `<li>Batch #${batchIds[i]}: ${batch.remainingVolumeLitres} L (${batch.fuelType})</li>`;
+                } catch (e) {
+                    html += `<li>Batch #${batchIds[i]}: (error fetching details)</li>`;
+                }
+            }
+            html += `</ul>`;
+            html += `<p><strong>Total remaining volume:</strong> ${totalVolume} L</p>`;
+            html += `<p><em>Sum of remainingVolumeLitres across all active batches the stakeholder is currently custodian of.</em></p>`;
+
+            holdingsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
