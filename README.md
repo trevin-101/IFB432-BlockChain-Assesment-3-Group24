@@ -104,3 +104,16 @@ Before running the project you need:
    - Regulator
 
 ---
+## How to run 
+
+This project has two part to set up: the smart contract (one-time deployment) and frontend dApp.
+
+### Part 1: Deploy smart contracts
+
+1. Open [Remix IDE](https://remix.ethereum.org) in your browser.
+2. In File Explorer, create a new file `FuelGuard.sol` and paste the contents of `contracts/FuelGuard.sol`.
+3. Go to the **Solidity Compiler** tab and compile with version `0.8.20` or higher.
+4. Switch to the **Deploy & Run** tab.
+5. Set **ENVIRONMENT** to `Browser Extension` select `Sepolia Testnet-Metamask`
+6. Confirm MetaMask is on the **Sepolia** network and using your **Admin** account.
+7. Deploy the three contracts **in this order**:
