@@ -34,3 +34,13 @@ FuelGuardRecord (state):
 - Auto-grants ADMIN_ROLE to deployer            
 - Only the Allocation contract can write to     
   batch state (via onlyAllocationContract)
+  
+FuelGuardAllocation (cross-contract calls to FuelGuardRecord):
+- allocateToWholesaler      
+- distributeToRetailer    
+- confirmDelivery
+   
+ FuelGuardVerification (read-only calls to FuelGuardRecord):
+ - getBatchDetails
+ - getBatchHistory
+ - getCurrentHoldings
