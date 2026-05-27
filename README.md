@@ -1,5 +1,5 @@
 # IFB452-BlockChain-Assesment-3-Group 24
-IFB452 BlockChain Assesment 3 by Group 24
+IFB452 BlockChain Assesment 3 by Group 24,
 Queensland University of Technology
 
 A blockchain-based supply chain solution for tracking fuel distribution in Australia, designed to provide transparency and prevent hoarding during national fuel shortages.
