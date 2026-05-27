@@ -196,3 +196,49 @@ The dApp is divided into sections, one per stakeholder role. Switch MetaMask acc
 | 4 | Retailer | Section 4 → **Confirm Delivery** (batch ID `3`) → batch state becomes Delivered |
 | 5 | Anyone | Section 5 → **View Batch Details** + **View Provenance History** for any batch |
 | 6 | Anyone | Section 6 → **Check Stakeholder Holdings** for any address |
+
+## Smart Contract Reference
+
+### FuelGuardRecord
+
+| Function | Caller | Purpose |
+|---|---|---|
+| `grantRole(address, bytes32)` | Admin | Assign role to a stakeholder |
+| `setAllocationContract(address)` | Admin | Link the Allocation contract |
+| `recordFuelBatch(string, uint256, string)` | Importer | Log a new fuel arrival |
+| `createChildBatch(...)` | Allocation only | Internal transfer mechanism |
+| `markDelivered(uint256, address)` | Allocation only | Finalise delivery |
+| `getBatchDetails(uint256)` | Public | Return full batch struct |
+| `getBatchHistory(uint256)` | Regulator | Return ordered transfer history |
+| `getCurrentHoldings(address)` | Regulator | List active batches a stakeholder holds |
+
+### FuelGuardAllocation
+
+| Function | Caller | Purpose |
+|---|---|---|
+| `allocateToWholesaler(uint256, address, uint256)` | Importer | Transfer fuel to a wholesaler |
+| `distributeToRetailer(uint256, address, uint256)` | Wholesaler | Transfer fuel to a retailer |
+| `confirmDelivery(uint256)` | Retailer | Mark batch as Delivered |
+
+### FuelGuardVerification
+
+| Function | Caller | Purpose |
+|---|---|---|
+| `getBatchDetails(uint256)` | Public | Read batch information |
+| `getBatchHistory(uint256)` | Regulator | Read provenance history |
+| `getCurrentHoldings(address)` | Regulator | Read stakeholder holdings |
+
+---
+
+## Team
+
+**Group 24 — IFB452 Blockchain Technology, Queensland University of Technology**
+- Kayler Nguyen (n12231789)
+- Trevin Juanli (n12040886)
+
+---
+
+## License
+
+This project is submitted as Assessment Task 3 - Final Asignmnet: Project Demo for IFB452 at QUT. Code is released under the MIT License for educational use.
+
