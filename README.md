@@ -77,9 +77,9 @@ Frontend/
 
 docs/
 
-  └── Group 24.pdf
+    └── Group 24.pdf
   
-  └── BPMN-Collaboration Diagram.pdf
+    └── BPMN-Collaboration Diagram.pdf
 
 README.md
 
