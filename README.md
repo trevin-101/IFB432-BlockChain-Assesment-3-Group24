@@ -170,3 +170,29 @@ Repeat for all four stakeholder roles (Importer, Wholesaler, Retailer, Regulator
    - Solidity Compiler tab → select the contract from dropdown → click the ABI copy icon
    - Paste each ABI into the corresponding variable (replace the `[]`)
 5. Save the file.
+
+### Part 5 - Run the dApp
+
+Firstly, you have to install Node.js  <https://nodejs.org/en>
+
+Then, install a http server, any you like, but we used lite-server
+
+Installing lite-server, open Command Prompt/Terminal and paste: `npm install -g lite-server`
+
+After that, Open VSCode with index.html file, run terminal in VsCode, `cd` to the Folder that html file included, and paste: `lite-server` and then `http://localhost:3000' will be shown, Ctrl + click to that link to open in your browser and connect Metamask when prompted.
+
+## How to use: 
+
+The dApp is divided into sections, one per stakeholder role. Switch MetaMask accounts as needed to play each role.
+
+### Demo flow
+
+| Step | MetaMask account | Action |
+|---|---|---|
+| 0 | Admin | Section 0 -> **Grant Role** and **Set Allocation Contract** (you technically could skip this step because of **Part 2,3**, However, skip **Part 2,3** to go straight to this section would be better because of Process flow, you definitely do not have to use the bytes32 value in this section ![Trollface](https://img.icons8.com/?size=100&id=61309&format=png&color=000000) )
+| 1 | Importer | Section 1 → **Record Fuel Batch** (e.g. Diesel, 900 L, Port of Brisbane) → creates Batch #1 |
+| 2 | Importer | Section 2 → **Allocate to Wholesaler** (batch ID `1`, volume `500`, wholesaler address) → creates Batch #2 |
+| 3 | Wholesaler | Section 3 → **Distribute to Retailer** (batch ID `2`, volume `500`, retailer address) → creates Batch #3 |
+| 4 | Retailer | Section 4 → **Confirm Delivery** (batch ID `3`) → batch state becomes Delivered |
+| 5 | Anyone | Section 5 → **View Batch Details** + **View Provenance History** for any batch |
+| 6 | Anyone | Section 6 → **Check Stakeholder Holdings** for any address |
